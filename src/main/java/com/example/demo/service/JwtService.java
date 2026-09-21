@@ -83,7 +83,7 @@ public class JwtService {
 	
 	public String determineProviderIdFromAuthUser(OAuth2User oauth2User, String registrationId)
 	{
-		String providerId = switch (registrationId.toLowerCase())
+		String  providerId = switch (registrationId.toLowerCase())
 				{
 		case "google" -> oauth2User.getAttribute("sub");
 		case "github" -> oauth2User.getAttribute("sub").toString();

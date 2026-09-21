@@ -18,6 +18,8 @@ import com.example.demo.entity.User;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.type.AuthProviderType;
 
+import jakarta.transaction.Transactional;
+
 
 
 @Service
@@ -40,7 +42,7 @@ private 	JwtService jwtService;
 	
 	
 	
-	public User signUp(LoginRequest loginRequest)
+	public User signUp(LoginRequest loginRequest , AuthProviderType authProviderType, String providerId)
 	{
 		 User user = repo.findByUserName(loginRequest.getUsername()).orElse(null);
 
@@ -48,16 +50,22 @@ private 	JwtService jwtService;
 		    {
 		        throw new IllegalArgumentException("User already exist");
 		    }
+		    
+		user = User.builder()
+				.userName(loginRequest.getUsername())
+				.providerId(providerId)
+				.authProviderType(authProviderType)
+			.build();
+				
 
-		    User newUser = new User();
+		   if(authProviderType == AuthProviderType.EMAIL)
+		   {
+			   user.setPassword(encoder.encode(loginRequest.getPassword()));
+		   }
 		    
 
-		    newUser.setUsername(loginRequest.getUsername());
-		    newUser.setPassword(encoder.encode(loginRequest.getPassword()));
-
-		  return   repo.save(newUser);
-		    
-		    
+		   
+		    return repo.save(user);
 
 		
 	}
@@ -66,7 +74,7 @@ private 	JwtService jwtService;
 	public RegisterResponse register(LoginRequest loginRequest)
 	{
 		
-		User newUser = signUp(loginRequest);
+		User newUser = signUp(loginRequest ,AuthProviderType.EMAIL, null);
 	   
 	    return new RegisterResponse(newUser.getId(), newUser.getUsername());
 	}
@@ -84,32 +92,34 @@ private 	JwtService jwtService;
 
 	    return new LoginResponse(token, user.getId());
 	}
-
-	public ResponseEntity<LoginResponse> handleOAuth2LoginRequest(OAuth2User auth2user, String registrationId) {
+	
+	
+@Transactional
+public ResponseEntity<LoginResponse> handleOAuth2LoginRequest(OAuth2User auth2user, String registrationId) {
 		
 		
 		AuthProviderType providerType = jwtService.getProviderTypeFromRegistrationId(registrationId);
 		String providerId = jwtService.determineProviderIdFromAuthUser(auth2user, registrationId);
-			User user  = repo.findyProviderIdAndProviderType(providerId , providerType).orElse(null);
+			User user  = repo.findByProviderIdAndAuthProviderType(providerId , providerType).orElse(null);
 			
 			
 		
-		String email = auth2user.getAttribute("gmail");
+		String email = auth2user.getAttribute("email");
 		
 		User emailUser = repo.findByUserName(email).orElse(null); 
 		 
 		if(user == null &&  emailUser == null)
 		{
-			String username = jwtService.determineProviderIdFromAuthUser( auth2user , registrationId);
 			
-			RegisterResponse registerResponse = 
-					
-					register(new LoginRequest(username , null));
+			
+			String username = jwtService.determineUsernameFromOAuth2User(auth2user, registrationId, providerId);
+		
+			user =		signUp(new LoginRequest(username , null), providerType, providerId);
 			
 		}
 		else if (user != null)
 		{
-			if(email != null && !email.isBlank() && !email.equals(user.getUsername()));
+			if(email != null && !email.isBlank() && !email.equals(user.getUsername()))
 			{
 				user.setUsername(email);
 				repo.save(user);
@@ -117,10 +127,10 @@ private 	JwtService jwtService;
 		}
 			else
 			{
-				throw new BadCredentialsException("this email is already register" + emailUser.getProvidrType());
+				throw new BadCredentialsException("this email is already register" + emailUser.getAuthProviderType());
 			}
 		
-		LoginResponse loginResponse = new LoginResponse(jwtService.generateAccessToken(user), null);
+		LoginResponse loginResponse = new LoginResponse(jwtService.generateAccessToken(user), user.getId());
 		
 		return ResponseEntity.ok(loginResponse);
 		

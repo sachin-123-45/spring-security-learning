@@ -27,7 +27,7 @@ public class Auth2SuccessHandler implements AuthenticationSuccessHandler {
 	
 	 private final UserService userService;
 	 
-	 private ObjectMapper objectMapper;
+	 private final  ObjectMapper objectMapper;
 	
 	@Override
 	public void onAuthenticationSuccess(HttpServletRequest request, HttpServletResponse response,
